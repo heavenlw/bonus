@@ -35,11 +35,11 @@ username:lw   password:123456    or you can register your own account
 ### 1. Different navigation bar based on the login-status
 
 ####Guest Mode
-![](
-)
+![](1.1.1.jpg)
 ####Admin Mode
-
+![](1.1.2.jpg)
 ####User Mode
+![](1.1.3.jpg)
 
 To achieve this, I use js in layout.ejs and add the different account type into session in login.js.
 
@@ -160,12 +160,10 @@ Here is the code in **login.js at Usercontroller**
 ###2. Different status in event detail page
 
 ####Guest Mode
-![](
-)
+![](1.2.1.jpg)
 
-####User Mode when the event had been regiestered 
-![](
-)
+####User Mode
+![](1.2.2.jpg)
 
 To achieve this, I add js in detail.ejs
 
@@ -196,3 +194,210 @@ To achieve this, I add js in detail.ejs
 
 
 
+###3. Show the remaining quota in event detail page
+
+![](1.3.1.jpg)
+
+To achieve this,I calculate the remaining quota in **BuAdminController's detail function** and show it in **detail.ejs**
+
+Here is the code
+
+~~~
+	detail: function (req, res) {
+
+ 		BuAdmin.findOne(req.params.id).populateAll().exec( function(err, model) {
+
+ 			if (model != null)
+      {
+        sails.log(model.beReg.length);
+         sails.log(model.beReg);
+        model.quota_usable = model.quota-model.beReg.length;
+ 				return res.view('detail', {'model': model});
+      }
+ 			else
+ 				return res.send("Event Error");
+
+ 		});
+
+ 	}
+~~~
+
+###4. Admin account has right to remove the registered user from event
+
+The event administrator can remove the registered user at the register page by clicking the link.
+![](1.4.1.jpg)
+
+the url in this system just like that:
+
+**http://localhost:1337/buadmin/removeuser/event_id?uid=user_id**
+
+Here is the **removeuser** function code in Buadmincontroller
+
+~~~
+removeuser: function (req, res) {
+
+    BuAdmin.findOne(req.params.id).exec( function (err, model) {
+
+      if (model !== null) {
+        model.beReg.remove(req.query.uid);
+        model.save();
+        return res.send("Event removed!");
+      }
+      else {
+        return res.send("Event not found!");
+      }
+    })
+    
+  }
+~~~
+
+###5.Policies Control
+
+In this system,normal account like stduents are not allowed to get or post data to serval functions(like remove register function). In order to prevent these accidents，I add policies control into sails.
+
+At **config/locales/policies.ejs**, I added the restrictive policies to different functions at BuAdminController
+
+~~~
+ BuAdminController: {
+
+    admin:'isAdmin',
+    create: 'isAdmin',
+    removeuser:'isAdmin',
+    showReger:'isAdmin'
+    
+
+  }
+~~~
+
+###6. Different admin account can control its own department event only.
+
+![](1.6.1.jpg)
+
+
+Here is the code to achieve this function
+
+~~~
+admin: function(req, res) {
+
+    if(req.session.usertype=="1")
+    {
+     åBuAdmin.find().exec( function(err, models) {
+
+      return res.view('admin', {'events': models});
+
+    });
+   }
+   if(req.session.usertype=="2")
+   {
+     BuAdmin.find().where({organizer:req.session.org}).exec( function(err, models) {
+
+      return res.view('admin', {'events': models});
+    });
+   }
+ }
+~~~
+
+---
+
+
+
+---
+
+## Bonus on App
+
+###1. Real-time event status change
+
+At the event detail page, the right button shows different status
+
+When users haven't logined:
+
+![](2.1.1.jpg)
+
+When users have registered the event:
+
+![](2.1.2.jpg)
+
+
+To achieve this function, I add an onfocus function to window at detail_page.js
+
+~~~
+function getRegStatus(e) {
+	if(Alloy.Globals.log_control!=null)
+	{
+		Alloy.Collections.myreg.fetch({
+			
+			success:function(){
+				
+				var change = Alloy.Collections.myreg.where({
+				id : fid
+			});
+			console.log(JSON.stringify(change));
+			if (change.length >= 1)
+			{
+				$.reg_button.title = "UnReg";
+			}
+			else
+			{
+				$.reg_button.title = "Reg";
+}
+				
+				}
+			
+		});
+			
+		}
+		else
+		{
+			$.reg_button.title ="Login";
+		}
+
+
+};
+~~~
+
+The model which use to get the register-event list also refresh at the same time by add:
+
+~~~
+
+"deleteAllOnFetch": true
+
+~~~ 
+
+
+###2. Get different data from sails by using type in url or post data.
+
+App and web both use same api provided by sails. But the data returned from api just fetch the web and can't be read by app. To solve this problem, I add the **type=1** at app's login function and model
+
+login:
+
+~~~
+var loginReq = Titanium.Network.createHTTPClient();
+	if ($.username.value != '' && $.username.value != '') {
+		loginReq.open('POST', 'http://localhost:1337/User/login');
+
+		loginReq.send({
+			username : $.username.value,
+			password : $.password.value,
+			type : 1
+		});
+	}
+~~~
+
+model
+
+~~~
+"URL":"http://localhost:1337/User/showReg?type=1",
+~~~
+
+the sails recieve the type and return different data:
+
+~~~
+if(req.body.type=="1")
+                {  
+                    return res.json(user);
+                }
+                else
+                {
+                    return res.redirect("BuAdmin/index");
+                }
+~~~
